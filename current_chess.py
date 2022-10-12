@@ -6,8 +6,9 @@ import pygame as pyg
 
 pyg.init()
 
-window_size = (800, 800)
+window_size = (600, 600)
 
+# draws main screen
 board_screen = pyg.display.set_mode(size=window_size)
 pyg.display.set_caption('Chess')
 board_screen.fill((255, 255, 255))
@@ -15,25 +16,25 @@ board_screen.fill((255, 255, 255))
 """
 Making a dictionary of squares as keys and square indexes (0-63) as their values
 """
+
 num_coords = [number for number in range(1, 9)]
 let_coords = [chr(letter) for letter in range(ord('a'), ord('a') + 8)]
 
-sq_names = [] #list of all square names
+sq_names = [] # list of all square names
 
-for j in num_coords[::-1]:
+for j in num_coords:
     for i in let_coords:
         sq_names.append(i+str(j))
 
 square_size = window_size[0] // 8
-images = {}
+
+images = {} # loads images at init so fetching them is more efficient 
 
 fen_to_name = {n: 'w' + n if n.islower() else 'b' + n.lower() for n in "rnbqkpPRNBQK" }
 
 starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-print(fen_to_name)
-
-
+print(sq_names)
 
 class Piece(object):
     def __init__(self, name):
@@ -64,6 +65,8 @@ class Queen(Piece):
     pass
 
 class GeneratePiece():
+
+    #TODO
     """subclasses = {}
 
     def __init_subclass__(cls, **kwargs) -> None:
@@ -75,9 +78,9 @@ class GeneratePiece():
     def create(cls, name):
         #return cls.subclasses[name]
         piece = None
-        if name == 'p':
+        if name == 'P':
             piece = Pawn('bp')
-        elif name == 'P':
+        elif name == 'p':
             piece = Pawn('wp')
         elif name == ('N'):
             piece = Knight('bn')
@@ -104,20 +107,13 @@ class GeneratePiece():
         
         
 
-
-
-
-
-
 class Square(object):
     def __init__(self, name, piece = None):
         self.height = int(window_size[0] / 8)
         self.width = int(window_size[1] / 8)
         self.square = pyg.Surface((self.width, self.height))
-
         self.name = name
         self.index = sq_names.index(name)
-
         self.piece = piece
 
     def __str__(self) -> str:
@@ -133,18 +129,17 @@ class Square(object):
         return (ord(self.name[0])-ord('a'), int(self.name[1]))
 
     def draw(self):
-        sq_draw = pyg.Surface((square_size, square_size))
+        
         if self.colour() == 'w':
-            
-            sq_draw.fill((255, 255, 255))
+            self.square.fill((255, 255, 255))
+
         else:
-            
-            sq_draw.fill((150, 160, 160))
+            self.square.fill((150, 160, 160))
 
         if self.piece is not None:
-            sq_draw.blit(images[self.piece], pyg.Rect(0, 0, square_size, square_size))
+            self.square.blit(images[self.piece.name], pyg.Rect(0, 0, square_size, square_size))
 
-        return sq_draw
+        return self.square
 
 
 class ChessBoard(object):
@@ -166,20 +161,24 @@ class ChessBoard(object):
                 board_screen.blit(squares.draw(), (i*square_size, j*square_size)) #TODO
 
     def fen_to_board(self, fen) -> array:
-        for i, row in enumerate(fen.split('/')):
-            
-            for j, c in enumerate(row):
-                temp_sq = self.board_array[i][j]
 
+        i = 0
+        j = 0
+        for row in fen.split('/'):
+            for c in row:
+                temp_sq = self.board_array[j%8][7-i]
+                
                 if c == ' ':
+                    
                     break
                 elif c in '12345678':
                     
-                    #brow.extend( ['--'] * int(c) )
-                    pass
+                    j += int(c)-1
 
                 else:
                     temp_sq.piece = GeneratePiece.create(c)
+                j += 1
+            i += 1
 
             
 
@@ -192,24 +191,17 @@ def load_images():
 
 
 
-
-def draw_pieces(screen, board):
-    for r in range(window_size[0]):
-        for c in range(window_size[0]):
-            piece = board[r][c]
-            if piece != "--":
-                screen.blit(images[piece], pyg.Rect(c*square_size, r*square_size, square_size, square_size))
-
 def main():
 
     gameExit = False
     load_images()
-
     game_board = ChessBoard()
-
+    game_board.fen_to_board(starting_fen)
 
     while not gameExit:
         for event in pyg.event.get():
+
+            
             game_board.draw()
             pyg.display.flip()
 
