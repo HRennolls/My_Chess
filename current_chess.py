@@ -6,10 +6,6 @@ import pygame as pyg
 pyg.init()
 
 window_size = (800, 800)
-board_screen = pyg.display.set_mode(size=window_size)
-
-pyg.display.set_caption('Chess')
-
 
 """
 Making a dictionary of squares as keys and square indexes (0-63) as their values
@@ -26,7 +22,7 @@ for j in num_coords[::-1]:
 square_size = window_size[0] // 8
 images = {}
 
-board_screen.fill((255, 255, 255))
+
 
 
 class Square(object):
@@ -51,7 +47,6 @@ class Square(object):
         return (ord(self.name[0])-ord('a'), int(self.name[1]))
 
 
-
 class ChessBoard(object):
 
     def __init__(self):
@@ -63,8 +58,6 @@ class ChessBoard(object):
         row = [Square(x) for x in row]
         board_array.append(row)
 
-            
-
     def draw(self):
         board = pyg.Surface(window_size)
 
@@ -73,21 +66,43 @@ class ChessBoard(object):
                 if squares.colour() == 'w':
                     pyg.draw.rect(board, (255, 255, 255), (i*square_size, j*square_size, square_size, square_size))
                 else:
-                    pyg.draw.rect(board, (0, 0, 0), (i*square_size, j*square_size, square_size, square_size))
+                    pyg.draw.rect(board, (150, 160, 160), (i*square_size, j*square_size, square_size, square_size))
 
         return board
 
-                
-gameExit = False
-new = ChessBoard()
 
-while not gameExit:
-    for event in pyg.event.get():
-        board_screen.blit(new.draw(), (0, 0))
-        pyg.display.flip()
+def load_images():
+    pieces = ['wp', 'wR', 'wN', 'wB','wK', 'wQ', 'bp', 'bR', 'bN', 'bB', 'bK', 'bQ']
+    for piece in pieces:
+        images[piece] = pyg.transform.scale(pyg.image.load("images/" + piece + ".png"), (square_size, square_size))
 
 
-        if event.type == pyg.QUIT:
-            gameExit = True
 
-            
+
+def main():
+
+    gameExit = False
+
+    board_screen = pyg.display.set_mode(size=window_size)
+    pyg.display.set_caption('Chess')
+    board_screen.fill((255, 255, 255))
+
+    load_images()
+
+    game_board = ChessBoard()
+
+
+    while not gameExit:
+        for event in pyg.event.get():
+            board_screen.blit(game_board.draw(), (0, 0))
+            pyg.display.flip()
+
+
+            if event.type == pyg.QUIT:
+                gameExit = True
+
+
+if __name__ == "__main__":
+    main()
+
+               
