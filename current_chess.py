@@ -24,6 +24,10 @@ fen_to_name = {n: 'w' + n if n.islower()
                 else 'b' + n.lower() for n in "rnbqkpPRNBQK" }
 starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+def on_board(legal_coords):
+    legal = [co for co in legal_coords if 
+            all(0 <= elem <= 7 for elem in co)] 
+    return legal
 
 class Piece(object):
     def __init__(self, name):
@@ -40,27 +44,82 @@ class Piece(object):
 
 
 class Pawn(Piece):
-    pass
-
+    def legal_moves(self, square):
+        x, y = square.coords()
+        legal_coords = [
+            (x, y+1)
+        ]
+        return on_board(legal_coords)
+    
 
 class Knight(Piece):
-    pass
+    def legal_moves(self, square):
+        x,y = square.coords()
+        legal_coords = [
+            (x+2, y+1),
+            (x+2, y-1),
+            (x-2, y+1),
+            (x-2, y-1),
+            (x+1, y-2),
+            (x-1, y-2),
+            (x+1, y+2),
+            (x-1, y+2)
+        ]
+        
+        return on_board(legal_coords)
 
 
 class Bishop(Piece):
-    pass
+    def legal_moves(self, square):
+        x,y = square.coords()
+        legal_coords = []
+        for i in range(8):
+            legal_coords.append((x+i, y+i))
+            legal_coords.append((x+i, y-i))
+            legal_coords.append((x-i, y+i))
+            legal_coords.append((x-i, y-i))
+        return on_board(legal_coords)
+    
 
 
 class Rook(Piece):
-    pass
+    def legal_moves(self, square):
+        x,y = square.coords()
+        legal_coords = []
+        for i in range(8):
+            legal_coords.append((x+i, y))
+            legal_coords.append((x, y+i))
+            legal_coords.append((x-i, y))
+            legal_coords.append((x, y-i))
+        return on_board(legal_coords)
 
 
 class King(Piece):
-    pass
+    def legal_moves(self, square):
+        x,y= square.coords()
+        legal_coords = []
+        for i in range(2):
+            legal_coords.append((x+i, y))
+            legal_coords.append((x, y+i))
+            legal_coords.append((x-i, y))
+            legal_coords.append((x, y-i))
+        return on_board(legal_coords)
 
 
 class Queen(Piece):
-    pass
+    def legal_moves(self, square):
+        x, y = square.coords()
+        legal_coords = []
+        for i in range(8):
+            legal_coords.append((x+i, y+i))
+            legal_coords.append((x+i, y-i))
+            legal_coords.append((x-i, y+i))
+            legal_coords.append((x-i, y-i))
+            legal_coords.append((x+i, y))
+            legal_coords.append((x, y+i))
+            legal_coords.append((x-i, y))
+            legal_coords.append((x, y-i))
+        return on_board(legal_coords)
 
 
 class GeneratePiece():
@@ -139,7 +198,7 @@ class Square(object):
         else:
             self.square.fill((150, 160, 160))
         if get_mouse_square() == self.coords():
-            pyg.draw.rect(self.square, (170, 170, 170), (0, 0, square_size, square_size), 4)
+            pyg.draw.rect(self.square, (170, 0, 0), (0, 0, square_size, square_size), 4)
         if self.piece is not None:
             self.square.blit(images[self.piece.name], pyg.Rect(0, 0, square_size, square_size))
 
@@ -162,7 +221,8 @@ class ChessBoard(object):
     def draw(self):
         for i, rows in enumerate(self.board_array):
             for j, squares in enumerate(rows):
-                board_screen.blit(squares.draw(), (i*square_size, j*square_size))
+                board_screen.blit(squares.draw(), ((j)*square_size, (7-i)*square_size))
+                
                 
 
     def fen_to_board(self, fen) -> array:
@@ -173,7 +233,7 @@ class ChessBoard(object):
         j = 0
         for row in fen.split('/'):
             for c in row:
-                temp_sq = self.board_array[j%8][7-i]
+                temp_sq = self.board_array[i][(j%8)]
                 if c == ' ':
                     break
                 elif c in '12345678':
@@ -195,13 +255,18 @@ def load_images():
 def get_mouse_square(board = None):
     mouse_pos = pyg.Vector2(pyg.mouse.get_pos())
     x = int(mouse_pos[0] // square_size)
-    y = int(mouse_pos[1] // square_size)
+    y = 7-int(mouse_pos[1] // square_size)
     try: 
         if x >= 0 and y >= 0:
-            if board is None: return (y, x)
-            else: return (mouse_pos, board.board_array[x][y])
+            if board is None: return (x, y)
+            else: return ((x, y), board.board_array[y][x])
     except IndexError: pass
     return None, None, None
+
+
+
+
+
 
 
 def main():
@@ -213,26 +278,38 @@ def main():
     game_board.fen_to_board(starting_fen)
     selected_piece = None
     down = False
+    legal = []
+    old_square = None
+
 
     while not gameExit:
 
         coord, square = get_mouse_square(game_board)
-
+        
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
                 gameExit = True
 
             if event.type == pyg.MOUSEBUTTONDOWN:
                 if square.piece is not None:
+                    old_square = square
                     selected_piece = square.piece
                     square.piece = None
                     down = True
-                
+                    legal = selected_piece.legal_moves(old_square)
+
+                    
             if event.type == pyg.MOUSEBUTTONUP:
                 new_coord, new_sq = get_mouse_square(game_board)
-                new_sq.piece = selected_piece
+                if selected_piece is not None:
+                    if new_coord in legal:
+                        new_sq.piece = selected_piece
+                    else:
+                        old_square.piece = selected_piece
+                legal = []
                 selected_piece = None
                 down = False
+                
 
             game_board.draw()
             if down == True and selected_piece is not None:
