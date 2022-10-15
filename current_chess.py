@@ -22,6 +22,8 @@ square_size = window_size[0] // 8
 fen_to_name = {n: 'w' + n if n.islower() 
                 else 'b' + n.lower() for n in "rnbqkpPRNBQK" }
 starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+test_fen = "3k4/2n2B2/1KP5/2B2p2/5b1p/7P/8/8 b - - 0 0"
+
 
 def on_board(legal_coords):
     # Returns the sublist of the input that
@@ -45,6 +47,7 @@ def diagonals(move_list, x, y, n, board, col):
 
 
 def rank_file(move_list, x, y, n, board, col):
+    
 
     vs = [
         (1, 0), 
@@ -60,21 +63,33 @@ def rank_file(move_list, x, y, n, board, col):
         
 
 def obstruction_restriction(move_list, x, y, xp, yp, n, board, col):
-    for i in range(1, n):
-        if board.board_array[y + i*yp][x + i*xp].piece is None:
-            move_list.append((x + i*xp, y + i*yp))
-        elif board.board_array[y + i*yp][x + i*xp].piece.colour == col:
-            break
-        elif board.board_array[y + i*yp][x + i*xp].piece.colour != col:
-            move_list.append((x + i*xp, y + i*yp))
-            break
+    if isinstance(board, list):
+        for i in range(1, n):
+            if board[y + i*yp][x + i*xp].piece is None:
+                move_list.append((x + i*xp, y + i*yp))
+            elif board[y + i*yp][x + i*xp].piece.colour == col:
+                break
+            elif board[y + i*yp][x + i*xp].piece.colour != col:
+                move_list.append((x + i*xp, y + i*yp))
+                break
+    if isinstance(board, ChessBoard):
+        for i in range(1, n):
+            if board.board_array[y + i*yp][x + i*xp].piece is None:
+                move_list.append((x + i*xp, y + i*yp))
+            elif board.board_array[y + i*yp][x + i*xp].piece.colour == col:
+                break
+            elif board.board_array[y + i*yp][x + i*xp].piece.colour != col:
+                move_list.append((x + i*xp, y + i*yp))
+                break
+
 
 
 
 class Piece(object):
-    def __init__(self, name):
+    def __init__(self, name, square):
         self.name = name
         self.colour = name[0]
+        self.square = square
 
     def __str__(self) -> str:
         return self.name
@@ -89,7 +104,8 @@ class Piece(object):
 class Pawn(Piece):
     moved = False
 
-    def legal_moves(self, square, board = None):
+    def legal_moves(self, square=None, board = None):
+        if square is None: square = self.square
         x, y = square.coords()
         legal_coords = []
 
@@ -103,23 +119,28 @@ class Pawn(Piece):
 
         if self.colour == 'w':
             legal_coords.append((x, y+1))
-            if not self.moved:
+            if not self.moved and board.board_array[y+2][x].piece is None:
                 legal_coords.append((x, y+2))
             capturable_squares(x+1, y+1, board, 'b')
             capturable_squares(x-1, y+1, board, 'b')
+            if board.board_array[y+1][x].piece is not None:
+                legal_coords.remove((x, y+1))
             
         else:
             legal_coords.append((x, y-1))
-            if not self.moved:
+            if not self.moved and board.board_array[y-2][x].piece is None:
                 legal_coords.append((x, y-2))
             capturable_squares(x+1, y-1, board, 'w')
-            capturable_squares(x-1, y-1, board, 'w')            
+            capturable_squares(x-1, y-1, board, 'w')
+            if board.board_array[y-1][x].piece is not None:
+                legal_coords.remove((x, y-1))            
         
         return on_board(legal_coords)
     
 
 class Knight(Piece):
-    def legal_moves(self, square, board = None):
+    def legal_moves(self, square = None, board = None):
+        if square is None: square = self.square
         x,y = square.coords()
         legal_coords = [
             (x+2, y+1),
@@ -133,19 +154,34 @@ class Knight(Piece):
         ]
         legal_coords = on_board(legal_coords)
         tlist = []
-        for i in legal_coords:
-            if board.board_array[i[1]][i[0]].piece is not None:
-                if board.board_array[i[1]][i[0]].piece.colour == self.colour:
-                    pass
+
+        if isinstance(board, ChessBoard):
+            for i in legal_coords:
+                if board.board_array[i[1]][i[0]].piece is not None:
+                    if board.board_array[i[1]][i[0]].piece.colour == self.colour:
+                        pass
+                    else:
+                        tlist.append(i)
                 else:
                     tlist.append(i)
-            else:
-                tlist.append(i)
-        return tlist
+            return tlist
+        else:
+            for i in legal_coords:
+                if board[i[1]][i[0]].piece is not None:
+                    if board[i[1]][i[0]].piece.colour == self.colour:
+                        pass
+                    else:
+                        tlist.append(i)
+                else:
+                    tlist.append(i)
+            return tlist
+
+
 
 
 class Bishop(Piece):
-    def legal_moves(self, square, board = None):
+    def legal_moves(self, square=None, board = None):
+        if square is None: square = self.square
         x,y = square.coords()
         legal_coords = []
         diagonals(legal_coords, x, y, 8, board, self.colour)
@@ -153,7 +189,8 @@ class Bishop(Piece):
     
 
 class Rook(Piece):
-    def legal_moves(self, square, board = None):
+    def legal_moves(self, square=None, board = None):
+        if square is None: square = self.square
         x,y = square.coords()
         legal_coords = []
         rank_file(legal_coords, x, y, 8, board, self.colour)
@@ -162,16 +199,22 @@ class Rook(Piece):
 
 class King(Piece):
     moved = False
-    def legal_moves(self, square, board = None):
+    check = False
+    def legal_moves(self, square=None, board = None):
+        if square is None: square = self.square
         x,y= square.coords()
         legal_coords = []
         diagonals(legal_coords, x, y, 2, board, self.colour)
         rank_file(legal_coords, x, y, 2, board, self.colour)
+
+
         return on_board(legal_coords)
 
 
 class Queen(Piece):
-    def legal_moves(self, square, board = None):
+    
+    def legal_moves(self, square=None, board = None):
+        if square is None: square = self.square
         x, y = square.coords()
         legal_coords = []
         diagonals(legal_coords, x, y, 8, board, self.colour)
@@ -189,33 +232,33 @@ class GeneratePiece():
     # generates an instance of each piece class
     # at squares, according to fen string.
     @classmethod
-    def create(cls, name):
+    def create(cls, name, square):
         #return cls.subclasses[name]
         piece = None
         if name == 'P':
-            piece = Pawn('bp')
+            piece = Pawn('bp', square)
         elif name == 'p':
-            piece = Pawn('wp')
+            piece = Pawn('wp', square)
         elif name == ('N'):
-            piece = Knight('bn')
+            piece = Knight('bn', square)
         elif name == ('n'):
-            piece = Knight('wn')
+            piece = Knight('wn', square)
         elif name == ('B'):
-            piece = Bishop('bb')
+            piece = Bishop('bb', square)
         elif name == ('b'):
-            piece = Bishop('wb')
+            piece = Bishop('wb', square)
         elif name == ('R'):
-            piece = Rook('br')
+            piece = Rook('br', square)
         elif name == ('r'):
-            piece = Rook('wr')
+            piece = Rook('wr', square)
         elif name == ('Q'):
-            piece = Queen('bq')
+            piece = Queen('bq', square)
         elif name == ('q'):
-            piece = Queen('wq') 
+            piece = Queen('wq', square) 
         elif name == ('K'):
-            piece = King('bk') 
+            piece = King('bk', square) 
         elif name == ('k'):
-            piece = King('wk')
+            piece = King('wk', square)
 
         return piece           
         
@@ -265,6 +308,7 @@ class Square(object):
 class ChessBoard(object):
     def __init__(self):
         pass
+
     # generates the board,
     # 8x8 Squares() with correct
     # indexing.
@@ -293,7 +337,7 @@ class ChessBoard(object):
                 elif c in '12345678':
                     j += int(c)-1
                 else:
-                    temp_sq.piece = GeneratePiece.create(c)
+                    temp_sq.piece = GeneratePiece.create(c, temp_sq)
                 j += 1
             i += 1
 
@@ -316,6 +360,27 @@ def get_mouse_square(board = None):
     except IndexError: pass
     return None, None, None
 
+def attacked_coords(turn, board):
+    coords = set()
+    for row in board.board_array:
+        for i in row:
+            if i.piece is not None:
+                if i.piece.colour != turn:
+                    coords.update(i.piece.legal_moves(i.piece.square, board))
+    return list(coords)
+
+
+def check_if_check(turn, board):
+    coords = attacked_coords(turn, board)
+    for m in coords:
+        x, y = m
+        if isinstance(board.board_array[y][x].piece, King):
+            return True
+        else: pass
+    return False
+
+
+
 def main():
     # Main game logic
     gameExit = False
@@ -327,6 +392,7 @@ def main():
     down = False
     turn = 'w'
     legal = []
+    check = False
 
 
     while not gameExit:
@@ -338,11 +404,40 @@ def main():
             if event.type == pyg.MOUSEBUTTONDOWN:
                 old_coord, old_square = get_mouse_square(game_board)
 
-                if old_square.piece is not None and old_square.piece.colour == turn:
+                if old_square.piece is not None and old_square.piece.colour == turn and not check:
                     legal = old_square.piece.legal_moves(old_square, game_board)
                     selected_piece = old_square.piece
                     down = True
                     old_square.piece = None
+                    if isinstance(selected_piece, King):
+                        legal = [a for a in legal if a not in attacked_coords(turn, game_board)]
+            
+
+                elif old_square.piece is not None and old_square.piece.colour == turn and check:
+                    legal = old_square.piece.legal_moves(old_square, game_board)
+                    selected_piece = old_square.piece
+                    xo, yo = old_coord
+                    tlegal = []
+                    for move in legal:
+                        x, y = move
+                        old_piece = game_board.board_array[y][x].piece
+                        game_board.board_array[y][x].piece = selected_piece
+                        game_board.board_array[yo][xo].piece = None
+                        if not check_if_check(turn, game_board): tlegal.append(move)
+                        game_board.board_array[yo][xo].piece = selected_piece
+                        game_board.board_array[y][x].piece = old_piece
+
+                    
+                    down = True
+                    old_square.piece = None
+                    legal = tlegal
+
+                    """elif isinstance(old_square.piece, King):
+                        legal = old_square.piece.legal_moves(old_square, game_board)
+                        selected_piece = old_square.piece
+                        down = True
+                        old_square.piece = None"""
+                        
                 else:
                     old_coord = None
                     old_square = None
@@ -352,8 +447,17 @@ def main():
                     new_coord, new_sq = get_mouse_square(game_board)
                     if selected_piece is not None and new_coord in legal:
                         new_sq.piece = selected_piece
+                        new_sq.piece.square = new_sq
+                        check = False
                         if isinstance(selected_piece, Pawn) or isinstance(selected_piece, King):
                             selected_piece.moved = True
+                        for i in selected_piece.legal_moves(new_sq, game_board):
+                            x, y = i
+                            if isinstance(game_board.board_array[y][x].piece, King):
+                                if game_board.board_array[y][x].piece.colour != selected_piece.colour:
+                                    check = True
+
+                        
                         if turn == 'w':
                             turn = 'b'
                         else:
