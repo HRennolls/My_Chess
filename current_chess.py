@@ -33,7 +33,6 @@ def on_board(legal_coords):
     return legal
 
 def diagonals(move_list, x, y, n, board, col):
-
     vs = [
         (1, 1),
         (1, -1), 
@@ -47,15 +46,12 @@ def diagonals(move_list, x, y, n, board, col):
 
 
 def rank_file(move_list, x, y, n, board, col):
-    
-
     vs = [
         (1, 0), 
         (0, 1), 
         (-1, 0), 
         (0, -1)
     ]
-
     for i in vs:
         try:
             obstruction_restriction(move_list, x, y, i[0], i[1], n, board, col)
@@ -63,15 +59,6 @@ def rank_file(move_list, x, y, n, board, col):
         
 
 def obstruction_restriction(move_list, x, y, xp, yp, n, board, col):
-    if isinstance(board, list):
-        for i in range(1, n):
-            if board[y + i*yp][x + i*xp].piece is None:
-                move_list.append((x + i*xp, y + i*yp))
-            elif board[y + i*yp][x + i*xp].piece.colour == col:
-                break
-            elif board[y + i*yp][x + i*xp].piece.colour != col:
-                move_list.append((x + i*xp, y + i*yp))
-                break
     if isinstance(board, ChessBoard):
         for i in range(1, n):
             if board.board_array[y + i*yp][x + i*xp].piece is None:
@@ -81,8 +68,6 @@ def obstruction_restriction(move_list, x, y, xp, yp, n, board, col):
             elif board.board_array[y + i*yp][x + i*xp].piece.colour != col:
                 move_list.append((x + i*xp, y + i*yp))
                 break
-
-
 
 
 class Piece(object):
@@ -104,36 +89,45 @@ class Piece(object):
 class Pawn(Piece):
     moved = False
 
+    def attacking_squares(self, square, board):
+        if self.colour == 'w': i = 1
+        else: i = -1
+        x, y = square.coords()
+        a_squares = []
+        a_squares.append((x+1, y+i))
+        a_squares.append((x-1, y+i))   
+        return on_board(a_squares)
+
+    def capturable_squares(self, square, board):
+        x, y = square.coords()
+        c_squares = []
+        if self.colour == 'w': i = 1
+        else: i = -1
+        try:
+            if board.board_array[y + i][x + 1].piece.colour != self.colour:
+                c_squares.append((x+1, y+i))
+        except (AttributeError, IndexError) as e: pass
+        try:
+            if board.board_array[y + i][x - 1].piece.colour != self.colour:
+                c_squares.append((x-1, y+i))   
+        except (AttributeError, IndexError) as e: pass
+        return on_board(c_squares)
+            
     def legal_moves(self, square=None, board = None):
         if square is None: square = self.square
         x, y = square.coords()
         legal_coords = []
 
-        def capturable_squares(x, y, board, col):
-            if board is not None:
-                    try:
-                        if board.board_array[y][x].piece.colour == col:
-                            legal_coords.append((x, y))
-                    except (AttributeError, IndexError) as e:
-                        pass
+        if self.colour == 'w': i = 1
+        else: i = -1
 
-        if self.colour == 'w':
-            legal_coords.append((x, y+1))
-            if not self.moved and board.board_array[y+2][x].piece is None:
-                legal_coords.append((x, y+2))
-            capturable_squares(x+1, y+1, board, 'b')
-            capturable_squares(x-1, y+1, board, 'b')
-            if board.board_array[y+1][x].piece is not None:
-                legal_coords.remove((x, y+1))
-            
-        else:
-            legal_coords.append((x, y-1))
-            if not self.moved and board.board_array[y-2][x].piece is None:
-                legal_coords.append((x, y-2))
-            capturable_squares(x+1, y-1, board, 'w')
-            capturable_squares(x-1, y-1, board, 'w')
-            if board.board_array[y-1][x].piece is not None:
-                legal_coords.remove((x, y-1))            
+        
+        if not self.moved and board.board_array[y + 2*i][x].piece is None and board.board_array[y + 1*i][x].piece is None:
+            legal_coords.append((x, y + 2*i))
+        if board.board_array[y + 1*i][x].piece is None:
+            legal_coords.append((x, y + 1*i))
+  
+        legal_coords.extend(self.capturable_squares(square, board))
         
         return on_board(legal_coords)
     
@@ -154,29 +148,15 @@ class Knight(Piece):
         ]
         legal_coords = on_board(legal_coords)
         tlist = []
-
-        if isinstance(board, ChessBoard):
-            for i in legal_coords:
-                if board.board_array[i[1]][i[0]].piece is not None:
-                    if board.board_array[i[1]][i[0]].piece.colour == self.colour:
-                        pass
-                    else:
-                        tlist.append(i)
+        for i in legal_coords:
+            if board.board_array[i[1]][i[0]].piece is not None:
+                if board.board_array[i[1]][i[0]].piece.colour == self.colour:
+                    pass
                 else:
                     tlist.append(i)
-            return tlist
-        else:
-            for i in legal_coords:
-                if board[i[1]][i[0]].piece is not None:
-                    if board[i[1]][i[0]].piece.colour == self.colour:
-                        pass
-                    else:
-                        tlist.append(i)
-                else:
-                    tlist.append(i)
-            return tlist
-
-
+            else:
+                tlist.append(i)
+        return tlist
 
 
 class Bishop(Piece):
@@ -212,7 +192,6 @@ class King(Piece):
 
 
 class Queen(Piece):
-    
     def legal_moves(self, square=None, board = None):
         if square is None: square = self.square
         x, y = square.coords()
@@ -286,13 +265,7 @@ class Square(object):
         return (ord(self.name[0])-ord('a'), int(self.name[1])-1)
 
     def draw(self):
-        # Pieces are drawn onto individual square 
-        # surfaces, depending on Square.piece attr,
-        # and ChessBoard.draw() blits each square.
-        #
-        # Squares will have to be redrawn upon 
-        # piece Movement.
-        
+        # Pieces are drawn onto individual square surfaces        
         if self.colour() == 'w':
             self.square.fill((255, 255, 255))
         else:
@@ -301,7 +274,6 @@ class Square(object):
             pyg.draw.rect(self.square, (170, 0, 0), (0, 0, square_size, square_size), 4)
         if self.piece is not None:
             self.square.blit(images[self.piece.name], pyg.Rect(0, 0, square_size, square_size))
-
         return self.square
 
 
@@ -309,9 +281,7 @@ class ChessBoard(object):
     def __init__(self):
         pass
 
-    # generates the board,
-    # 8x8 Squares() with correct
-    # indexing.
+    # Main internal game board
     board_array = []
     for i in range(8):
         row = sq_names[i*8 : i*8 + 8]
@@ -324,9 +294,6 @@ class ChessBoard(object):
                 board_screen.blit(squares.draw(), ((j)*square_size, (7-i)*square_size))
                 
     def fen_to_board(self, fen):
-        # Generates pieces directly onto
-        # the board_array according to fen
-        # string.
         i = 0
         j = 0
         for row in fen.split('/'):
@@ -342,7 +309,7 @@ class ChessBoard(object):
             i += 1
 
 
-# loads images at init so fetching them is more efficient 
+# loads images at init
 images = {} 
 def load_images():
     pieces = ['wp', 'wr', 'wn', 'wb','wk', 'wq', 'bp', 'br', 'bn', 'bb', 'bk', 'bq']
@@ -365,16 +332,17 @@ def attacked_coords(turn, board):
     for row in board.board_array:
         for i in row:
             if i.piece is not None:
-                if i.piece.colour != turn:
+                if i.piece.colour != turn and isinstance(i.piece, Pawn):
+                    coords.update(i.piece.attacking_squares(i.piece.square, board))
+                elif i.piece.colour != turn:
                     coords.update(i.piece.legal_moves(i.piece.square, board))
     return list(coords)
-
 
 def check_if_check(turn, board):
     coords = attacked_coords(turn, board)
     for m in coords:
         x, y = m
-        if isinstance(board.board_array[y][x].piece, King):
+        if isinstance(board.board_array[y][x].piece, King) and board.board_array[y][x].piece.colour == turn:
             return True
         else: pass
     return False
@@ -382,21 +350,16 @@ def check_if_check(turn, board):
 
 
 def main():
-    # Main game logic
     gameExit = False
     load_images()
     clock = pyg.time.Clock()
     game_board = ChessBoard()
-    game_board.fen_to_board(starting_fen)
+    game_board.fen_to_board(starting_fen) #choose starting position
     selected_piece = None
-    down = False
+    down = False #click-drag
     turn = 'w'
-    legal = []
-    check = False
-
 
     while not gameExit:
-        
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
                 gameExit = True
@@ -404,21 +367,14 @@ def main():
             if event.type == pyg.MOUSEBUTTONDOWN:
                 old_coord, old_square = get_mouse_square(game_board)
 
-                if old_square.piece is not None and old_square.piece.colour == turn and not check:
-                    legal = old_square.piece.legal_moves(old_square, game_board)
-                    selected_piece = old_square.piece
-                    down = True
-                    old_square.piece = None
-                    if isinstance(selected_piece, King):
-                        legal = [a for a in legal if a not in attacked_coords(turn, game_board)]
-            
-
-                elif old_square.piece is not None and old_square.piece.colour == turn and check:
+                if old_square.piece is not None and old_square.piece.colour == turn:
                     legal = old_square.piece.legal_moves(old_square, game_board)
                     selected_piece = old_square.piece
                     xo, yo = old_coord
                     tlegal = []
+
                     for move in legal:
+                        #checks if any pseudo-legal moves result in self king check
                         x, y = move
                         old_piece = game_board.board_array[y][x].piece
                         game_board.board_array[y][x].piece = selected_piece
@@ -426,18 +382,11 @@ def main():
                         if not check_if_check(turn, game_board): tlegal.append(move)
                         game_board.board_array[yo][xo].piece = selected_piece
                         game_board.board_array[y][x].piece = old_piece
-
                     
                     down = True
                     old_square.piece = None
                     legal = tlegal
 
-                    """elif isinstance(old_square.piece, King):
-                        legal = old_square.piece.legal_moves(old_square, game_board)
-                        selected_piece = old_square.piece
-                        down = True
-                        old_square.piece = None"""
-                        
                 else:
                     old_coord = None
                     old_square = None
@@ -448,34 +397,19 @@ def main():
                     if selected_piece is not None and new_coord in legal:
                         new_sq.piece = selected_piece
                         new_sq.piece.square = new_sq
-                        check = False
                         if isinstance(selected_piece, Pawn) or isinstance(selected_piece, King):
                             selected_piece.moved = True
-                        for i in selected_piece.legal_moves(new_sq, game_board):
-                            x, y = i
-                            if isinstance(game_board.board_array[y][x].piece, King):
-                                if game_board.board_array[y][x].piece.colour != selected_piece.colour:
-                                    check = True
 
-                        
                         if turn == 'w':
                             turn = 'b'
                         else:
                             turn = 'w' 
                     else:
                         old_square.piece = selected_piece
-
-                    
-                legal = []
-                selected_piece = None
                 down = False
                 
-
-
-
             game_board.draw()
             if down == True and selected_piece is not None:
-
                 for i in legal:
                     x = (i[0]*square_size) + int(square_size/2)
                     y = ((7-i[1])*square_size) + int(square_size/2)
@@ -486,9 +420,6 @@ def main():
                 image_rect.center = pyg.Vector2(pyg.mouse.get_pos())
                 board_screen.blit(image,image_rect)
 
-                
-
-            
             pyg.display.flip()
             clock.tick(30)
 
