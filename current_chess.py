@@ -88,6 +88,7 @@ class Piece(object):
 
 class Pawn(Piece):
     moved = False
+    en_passant = False
 
     def attacking_squares(self, square, board):
         if self.colour == 'w': i = 1
@@ -409,6 +410,7 @@ def main():
     selected_piece = None
     down = False #click-drag
     turn = 'w'
+    en_pass_pawn = None
 
     while not gameExit:
         for event in pyg.event.get():
@@ -433,6 +435,17 @@ def main():
                         if selected_piece.castle(game_board)[1]: legal.append((xo + 2, yo))
                         k_rook_sq = game_board.board_array[yo][xo + 3]
                         q_rook_sq = game_board.board_array[yo][xo - 4]
+
+                    # en passant
+                    if isinstance(selected_piece, Pawn):
+                        for i in [-1, 1]:
+                            adjacent = game_board.board_array[yo][xo + i].piece
+                            if adjacent is not None and adjacent == en_pass_pawn:
+                                if turn == 'w':
+                                    legal.append((xo + i, yo + 1))
+                                else:
+                                    legal.append((xo + i, yo - 1))
+                                
                     down = True
                     old_square.piece = None
                 else:
@@ -442,20 +455,32 @@ def main():
             if event.type == pyg.MOUSEBUTTONUP:
                 if old_square is not None:
                     new_coord, new_sq = get_mouse_square(game_board)
+                    xn, yn = new_coord
+                    # make move
                     if selected_piece is not None and new_coord in legal:
                         new_sq.piece = selected_piece
                         new_sq.piece.square = new_sq
+                        if isinstance(selected_piece, Pawn) and en_pass_pawn is not None:
+                            xe, ye = en_pass_pawn.square.coords()
+                            if abs(yn - yo) == 1 and abs(xn - xo) == 1:
+                                if turn == 'w' and yn - ye == 1: en_pass_pawn.square.piece = None
+                                elif turn == 'b' and yn - ye == -1: en_pass_pawn.square.piece = None
+                        en_pass_pawn = None
                         if isinstance(selected_piece, (Pawn, King, Rook)):
                             selected_piece.moved = True
+                        # castle rook    
                         if isinstance(selected_piece, King):
-                            # castle rook
-                            nx, ny = new_coord
-                            if nx == xo + 2:
-                                game_board.board_array[ny][xo+1].piece = k_rook_sq.piece
+                            if xn == xo + 2:
+                                game_board.board_array[yn][xo+1].piece = k_rook_sq.piece
                                 k_rook_sq.piece = None
-                            if nx == xo - 2:
-                                game_board.board_array[ny][xo-1].piece = q_rook_sq.piece
+                            if xn == xo - 2:
+                                game_board.board_array[yn][xo-1].piece = q_rook_sq.piece
                                 q_rook_sq.piece = None
+                        # if pawn's double stepped; en passant poss
+                        if isinstance(selected_piece, Pawn) and abs(yn - yo) == 2:
+                            selected_piece.en_passant = True
+                            en_pass_pawn = selected_piece
+                            
                         # promotion: always Queen
                         if isinstance(selected_piece, Pawn) and selected_piece.promotion():
                             new_sq.piece = Queen('{}q'.format(turn), new_sq)
