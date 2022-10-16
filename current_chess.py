@@ -169,6 +169,7 @@ class Bishop(Piece):
     
 
 class Rook(Piece):
+    moved = False
     def legal_moves(self, square=None, board = None):
         if square is None: square = self.square
         x,y = square.coords()
@@ -180,6 +181,13 @@ class Rook(Piece):
 class King(Piece):
     moved = False
     check = False
+
+    def castle_coords(self, square, board):
+        x, y = square.coords()
+
+        pass
+
+
     def legal_moves(self, square=None, board = None):
         if square is None: square = self.square
         x,y= square.coords()
@@ -189,6 +197,8 @@ class King(Piece):
 
 
         return on_board(legal_coords)
+
+
 
 
 class Queen(Piece):
@@ -347,6 +357,18 @@ def check_if_check(turn, board):
         else: pass
     return False
 
+#checks if a move results in turn king check 
+def legal_and_ncheck(old_coord, move, piece, turn, board):
+    xo, yo = old_coord
+    x, y = move
+    movable = False
+    old_piece = board.board_array[y][x].piece
+    board.board_array[y][x].piece = piece
+    board.board_array[yo][xo].piece = None
+    if not check_if_check(turn, board): movable = True
+    board.board_array[yo][xo].piece = piece
+    board.board_array[y][x].piece = old_piece
+    return movable
 
 
 def main():
@@ -371,21 +393,49 @@ def main():
                     legal = old_square.piece.legal_moves(old_square, game_board)
                     selected_piece = old_square.piece
                     xo, yo = old_coord
-                    tlegal = []
 
+                    tlegal = []
                     for move in legal:
-                        #checks if any pseudo-legal moves result in self king check
-                        x, y = move
-                        old_piece = game_board.board_array[y][x].piece
-                        game_board.board_array[y][x].piece = selected_piece
-                        game_board.board_array[yo][xo].piece = None
-                        if not check_if_check(turn, game_board): tlegal.append(move)
-                        game_board.board_array[yo][xo].piece = selected_piece
-                        game_board.board_array[y][x].piece = old_piece
-                    
+                        if legal_and_ncheck(old_coord, move, selected_piece, turn, game_board):
+                            tlegal.append(move)
+                    legal = tlegal
+
+                    #castling
+
+                    #TODO this is triggering even after king move
+                    if isinstance(selected_piece, King) and not selected_piece.moved and not check_if_check(turn, game_board):
+                        k_rook_sq = game_board.board_array[yo][xo + 3]
+                        q_rook_sq = game_board.board_array[yo][xo - 4]
+
+                        if isinstance(k_rook_sq.piece, Rook) and not k_rook_sq.piece.moved:
+                            rcas = True
+                            #check way is clear
+                            for i in game_board.board_array[yo][xo+1:xo+3]:
+                                if i.piece is not None:
+                                    rcas = False
+                                    break
+                            for i in range(3):
+                                if not legal_and_ncheck(old_coord, (xo+i, yo), selected_piece, turn, game_board):
+                                    rcas = False
+                                    break
+                            if rcas: legal.append((xo + 2, yo))
+
+                        if isinstance(q_rook_sq.piece, Rook) and not q_rook_sq.piece.moved:
+                            lcas = True
+                            #check way is clear
+                            for i in game_board.board_array[yo][xo-3:xo]:
+                                if i.piece is not None:
+                                    lcas = False
+                                    break
+                            for i in range(3):
+                                if not legal_and_ncheck(old_coord, (xo-i, yo), selected_piece, turn, game_board):
+                                    lcas = False
+                                    break
+                            if lcas: legal.append((xo - 2, yo))
+                        
+
                     down = True
                     old_square.piece = None
-                    legal = tlegal
 
                 else:
                     old_coord = None
@@ -397,8 +447,16 @@ def main():
                     if selected_piece is not None and new_coord in legal:
                         new_sq.piece = selected_piece
                         new_sq.piece.square = new_sq
-                        if isinstance(selected_piece, Pawn) or isinstance(selected_piece, King):
+                        if isinstance(selected_piece, (Pawn, King, Rook)):
                             selected_piece.moved = True
+                        if isinstance(selected_piece, King):
+                            nx, ny = new_coord
+                            if nx == xo + 2:
+                                game_board.board_array[ny][xo+1].piece = k_rook_sq.piece
+                                k_rook_sq.piece = None
+                            if nx == xo - 2:
+                                game_board.board_array[ny][xo-1].piece = q_rook_sq.piece
+                                q_rook_sq.piece = None
 
                         if turn == 'w':
                             turn = 'b'
