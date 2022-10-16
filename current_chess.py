@@ -439,7 +439,9 @@ def main():
                     # en passant
                     if isinstance(selected_piece, Pawn):
                         for i in [-1, 1]:
-                            adjacent = game_board.board_array[yo][xo + i].piece
+                            try:
+                                adjacent = game_board.board_array[yo][xo + i].piece
+                            except IndexError: continue
                             if adjacent is not None and adjacent == en_pass_pawn:
                                 if turn == 'w':
                                     legal.append((xo + i, yo + 1))
