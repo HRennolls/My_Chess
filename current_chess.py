@@ -117,11 +117,9 @@ class Pawn(Piece):
         if square is None: square = self.square
         x, y = square.coords()
         legal_coords = []
-
         if self.colour == 'w': i = 1
         else: i = -1
 
-        
         if not self.moved and board.board_array[y + 2*i][x].piece is None and board.board_array[y + 1*i][x].piece is None:
             legal_coords.append((x, y + 2*i))
         if board.board_array[y + 1*i][x].piece is None:
@@ -130,6 +128,10 @@ class Pawn(Piece):
         legal_coords.extend(self.capturable_squares(square, board))
         
         return on_board(legal_coords)
+
+    def promotion(self):
+        x, y = self.square.coords()
+        if y == 0 or y == 7: return True
     
 
 class Knight(Piece):
@@ -182,11 +184,35 @@ class King(Piece):
     moved = False
     check = False
 
-    def castle_coords(self, square, board):
-        x, y = square.coords()
+    def castle(self, board):
+        x, y = self.square.coords()
+        k_rook_sq = board.board_array[y][x + 3]
+        q_rook_sq = board.board_array[y][x - 4]
 
-        pass
+        if isinstance(k_rook_sq.piece, Rook) and not k_rook_sq.piece.moved:
+            short_cas = True
+            #check way is clear
+            for i in board.board_array[y][ x+1: x+3]:
+                if i.piece is not None:
+                    short_cas = False
+                    break
+            for i in range(3):
+                if not legal_and_ncheck((x, y), (x+i, y), self, self.colour, board):
+                    short_cas = False
+                    break
 
+        if isinstance(q_rook_sq.piece, Rook) and not q_rook_sq.piece.moved:
+            long_cas = True
+            #check way is clear
+            for i in board.board_array[y][ x-3: x]:
+                if i.piece is not None:
+                    long_cas = False
+                    break
+            for i in range(3):
+                if not legal_and_ncheck((x, y), (x-i, y), self, self.colour, board):
+                    long_cas = False
+                    break
+        return([long_cas, short_cas])
 
     def legal_moves(self, square=None, board = None):
         if square is None: square = self.square
@@ -194,11 +220,7 @@ class King(Piece):
         legal_coords = []
         diagonals(legal_coords, x, y, 2, board, self.colour)
         rank_file(legal_coords, x, y, 2, board, self.colour)
-
-
         return on_board(legal_coords)
-
-
 
 
 class Queen(Piece):
@@ -357,7 +379,7 @@ def check_if_check(turn, board):
         else: pass
     return False
 
-#checks if a move results in turn king check 
+# if a move results in check on turn king
 def legal_and_ncheck(old_coord, move, piece, turn, board):
     xo, yo = old_coord
     x, y = move
@@ -370,6 +392,13 @@ def legal_and_ncheck(old_coord, move, piece, turn, board):
     board.board_array[y][x].piece = old_piece
     return movable
 
+# if turn player has any legal moves
+def any_moves(turn, game_board):
+    for row in game_board.board_array:
+        for piece in (x.piece for x in row if x.piece is not None and x.piece.colour == turn):
+            for pseudomove in piece.legal_moves(piece.square, game_board):
+                if legal_and_ncheck(piece.square.coords(), pseudomove, piece, turn, game_board):
+                    return True
 
 def main():
     gameExit = False
@@ -385,58 +414,27 @@ def main():
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
                 gameExit = True
+                mate = False
 
             if event.type == pyg.MOUSEBUTTONDOWN:
                 old_coord, old_square = get_mouse_square(game_board)
-
                 if old_square.piece is not None and old_square.piece.colour == turn:
                     legal = old_square.piece.legal_moves(old_square, game_board)
                     selected_piece = old_square.piece
                     xo, yo = old_coord
-
                     tlegal = []
                     for move in legal:
                         if legal_and_ncheck(old_coord, move, selected_piece, turn, game_board):
                             tlegal.append(move)
                     legal = tlegal
-
                     #castling
-
-                    #TODO this is triggering even after king move
                     if isinstance(selected_piece, King) and not selected_piece.moved and not check_if_check(turn, game_board):
+                        if selected_piece.castle(game_board)[0]: legal.append((xo - 2, yo))
+                        if selected_piece.castle(game_board)[1]: legal.append((xo + 2, yo))
                         k_rook_sq = game_board.board_array[yo][xo + 3]
                         q_rook_sq = game_board.board_array[yo][xo - 4]
-
-                        if isinstance(k_rook_sq.piece, Rook) and not k_rook_sq.piece.moved:
-                            rcas = True
-                            #check way is clear
-                            for i in game_board.board_array[yo][xo+1:xo+3]:
-                                if i.piece is not None:
-                                    rcas = False
-                                    break
-                            for i in range(3):
-                                if not legal_and_ncheck(old_coord, (xo+i, yo), selected_piece, turn, game_board):
-                                    rcas = False
-                                    break
-                            if rcas: legal.append((xo + 2, yo))
-
-                        if isinstance(q_rook_sq.piece, Rook) and not q_rook_sq.piece.moved:
-                            lcas = True
-                            #check way is clear
-                            for i in game_board.board_array[yo][xo-3:xo]:
-                                if i.piece is not None:
-                                    lcas = False
-                                    break
-                            for i in range(3):
-                                if not legal_and_ncheck(old_coord, (xo-i, yo), selected_piece, turn, game_board):
-                                    lcas = False
-                                    break
-                            if lcas: legal.append((xo - 2, yo))
-                        
-
                     down = True
                     old_square.piece = None
-
                 else:
                     old_coord = None
                     old_square = None
@@ -450,6 +448,7 @@ def main():
                         if isinstance(selected_piece, (Pawn, King, Rook)):
                             selected_piece.moved = True
                         if isinstance(selected_piece, King):
+                            # castle rook
                             nx, ny = new_coord
                             if nx == xo + 2:
                                 game_board.board_array[ny][xo+1].piece = k_rook_sq.piece
@@ -457,22 +456,29 @@ def main():
                             if nx == xo - 2:
                                 game_board.board_array[ny][xo-1].piece = q_rook_sq.piece
                                 q_rook_sq.piece = None
-
+                        # promotion: always Queen
+                        if isinstance(selected_piece, Pawn) and selected_piece.promotion():
+                            new_sq.piece = Queen('{}q'.format(turn), new_sq)
                         if turn == 'w':
                             turn = 'b'
                         else:
                             turn = 'w' 
                     else:
                         old_square.piece = selected_piece
-                down = False
-                
+                    # Checkmate check
+                    if check_if_check(turn, game_board):
+                        mate = not any_moves(turn, game_board)
+                        if mate: gameExit = True 
+                    down = False
+
             game_board.draw()
+            # draws legal moves
             if down == True and selected_piece is not None:
                 for i in legal:
                     x = (i[0]*square_size) + int(square_size/2)
                     y = ((7-i[1])*square_size) + int(square_size/2)
                     pyg.draw.circle(board_screen, (150, 0, 0), (x, y), square_size/10)
-
+                # blits piece under cursor when dragging
                 image = selected_piece.image()
                 image_rect = image.get_rect()
                 image_rect.center = pyg.Vector2(pyg.mouse.get_pos())
