@@ -25,10 +25,10 @@ starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 test_fen = "3k4/2n2B2/1KP5/2B2p2/5b1p/7P/8/8 b - - 0 0"
 
 
-def on_board(legal_coords):
+def on_board(los):
     # Returns the sublist of the input that
     # is actually on the board.
-    legal = [co for co in legal_coords if 
+    legal = [co for co in los if 
             all(0 <= elem <= 7 for elem in co)]
     return legal
 
@@ -114,21 +114,18 @@ class Pawn(Piece):
         except (AttributeError, IndexError) as e: pass
         return on_board(c_squares)
             
-    def legal_moves(self, square=None, board = None):
+    def line_of_sight(self, square=None, board = None):
         if square is None: square = self.square
         x, y = square.coords()
-        legal_coords = []
+        los = []
         if self.colour == 'w': i = 1
         else: i = -1
-
         if not self.moved and board.board_array[y + 2*i][x].piece is None and board.board_array[y + 1*i][x].piece is None:
-            legal_coords.append((x, y + 2*i))
+            los.append((x, y + 2*i))
         if board.board_array[y + 1*i][x].piece is None:
-            legal_coords.append((x, y + 1*i))
-  
-        legal_coords.extend(self.capturable_squares(square, board))
-        
-        return on_board(legal_coords)
+            los.append((x, y + 1*i))
+        los.extend(self.capturable_squares(square, board))
+        return on_board(los)
 
     def promotion(self):
         x, y = self.square.coords()
@@ -136,10 +133,10 @@ class Pawn(Piece):
     
 
 class Knight(Piece):
-    def legal_moves(self, square = None, board = None):
+    def line_of_sight(self, square = None, board = None):
         if square is None: square = self.square
         x,y = square.coords()
-        legal_coords = [
+        los = [
             (x+2, y+1),
             (x+2, y-1),
             (x-2, y+1),
@@ -149,9 +146,9 @@ class Knight(Piece):
             (x+1, y+2),
             (x-1, y+2)
         ]
-        legal_coords = on_board(legal_coords)
+        los = on_board(los)
         tlist = []
-        for i in legal_coords:
+        for i in los:
             if board.board_array[i[1]][i[0]].piece is not None:
                 if board.board_array[i[1]][i[0]].piece.colour == self.colour:
                     pass
@@ -163,22 +160,22 @@ class Knight(Piece):
 
 
 class Bishop(Piece):
-    def legal_moves(self, square=None, board = None):
+    def line_of_sight(self, square=None, board = None):
         if square is None: square = self.square
         x,y = square.coords()
-        legal_coords = []
-        diagonals(legal_coords, x, y, 8, board, self.colour)
-        return on_board(legal_coords)
+        los = []
+        diagonals(los, x, y, 8, board, self.colour)
+        return on_board(los)
     
 
 class Rook(Piece):
     moved = False
-    def legal_moves(self, square=None, board = None):
+    def line_of_sight(self, square=None, board = None):
         if square is None: square = self.square
         x,y = square.coords()
-        legal_coords = []
-        rank_file(legal_coords, x, y, 8, board, self.colour)
-        return on_board(legal_coords)
+        los = []
+        rank_file(los, x, y, 8, board, self.colour)
+        return on_board(los)
 
 
 class King(Piece):
@@ -198,7 +195,7 @@ class King(Piece):
                     short_cas = False
                     break
             for i in range(3):
-                if not legal_and_ncheck((x, y), (x+i, y), self, self.colour, board):
+                if not legal_and_ncheck(Move(self.square, board.board_array[y][x+i]), board):
                     short_cas = False
                     break
 
@@ -210,28 +207,28 @@ class King(Piece):
                     long_cas = False
                     break
             for i in range(3):
-                if not legal_and_ncheck((x, y), (x-i, y), self, self.colour, board):
+                if not legal_and_ncheck(Move(self.square, board.board_array[y][x-i]), board):
                     long_cas = False
                     break
         return([long_cas, short_cas])
 
-    def legal_moves(self, square=None, board = None):
+    def line_of_sight(self, square=None, board = None):
         if square is None: square = self.square
         x,y= square.coords()
-        legal_coords = []
-        diagonals(legal_coords, x, y, 2, board, self.colour)
-        rank_file(legal_coords, x, y, 2, board, self.colour)
-        return on_board(legal_coords)
+        los = []
+        diagonals(los, x, y, 2, board, self.colour)
+        rank_file(los, x, y, 2, board, self.colour)
+        return on_board(los)
 
 
 class Queen(Piece):
-    def legal_moves(self, square=None, board = None):
+    def line_of_sight(self, square=None, board = None):
         if square is None: square = self.square
         x, y = square.coords()
-        legal_coords = []
-        diagonals(legal_coords, x, y, 8, board, self.colour)
-        rank_file(legal_coords, x, y, 8, board, self.colour) 
-        return on_board(legal_coords)
+        los = []
+        diagonals(los, x, y, 8, board, self.colour)
+        rank_file(los, x, y, 8, board, self.colour) 
+        return on_board(los)
 
 
 class GeneratePiece():
@@ -311,9 +308,6 @@ class Square(object):
 
 
 class ChessBoard(object):
-    def __init__(self):
-        pass
-
     # Main internal game board
     board_array = []
     for i in range(8):
@@ -342,6 +336,42 @@ class ChessBoard(object):
             i += 1
 
 
+class Move():
+    def __init__(self, from_sq, to_sq, piece=None):
+        if piece == None: self.piece = from_sq.piece
+        else: self.piece = piece
+        self.from_sq = from_sq
+        self.to_sq = to_sq
+        self.captures = to_sq.piece
+
+    def __str__(self) -> str:
+        return "({}, {} to {})".format(self.piece, self.from_sq, self.to_sq)
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def __eq__(self, __o: object) -> bool:
+        if not isinstance(__o, Move): return NotImplemented
+        return self.from_sq == __o.from_sq and self.to_sq == __o.to_sq and self.piece == __o.piece
+
+def actions(turn, board):
+    moves = []
+    for row in board.board_array:
+        for piece in (x.piece for x in row if x.piece is not None and x.piece.colour == turn):
+            moves.extend(legal_moves(piece, board))
+    return moves
+
+def legal_moves(piece, board):
+    moves = [Move(piece.square, board.board_array[y][x]) for x, y in piece.line_of_sight(piece.square, board)]
+   
+    tlegal = []
+    for move in moves:
+        if legal_and_ncheck(move, board):
+            tlegal.append(move)
+   
+    return tlegal
+
+
 # loads images at init
 images = {} 
 def load_images():
@@ -360,7 +390,7 @@ def get_mouse_square(board = None):
     except IndexError: pass
     return None, None, None
 
-def attacked_coords(turn, board):
+def all_opp_los(turn, board):
     coords = set()
     for row in board.board_array:
         for i in row:
@@ -368,11 +398,11 @@ def attacked_coords(turn, board):
                 if i.piece.colour != turn and isinstance(i.piece, Pawn):
                     coords.update(i.piece.attacking_squares(i.piece.square, board))
                 elif i.piece.colour != turn:
-                    coords.update(i.piece.legal_moves(i.piece.square, board))
+                    coords.update(i.piece.line_of_sight(i.piece.square, board))
     return list(coords)
 
 def check_if_check(turn, board):
-    coords = attacked_coords(turn, board)
+    coords = all_opp_los(turn, board)
     for m in coords:
         x, y = m
         if isinstance(board.board_array[y][x].piece, King) and board.board_array[y][x].piece.colour == turn:
@@ -381,25 +411,21 @@ def check_if_check(turn, board):
     return False
 
 # if a move results in check on turn king
-def legal_and_ncheck(old_coord, move, piece, turn, board):
-    xo, yo = old_coord
-    x, y = move
+def legal_and_ncheck(move, board):
     movable = False
-    old_piece = board.board_array[y][x].piece
-    board.board_array[y][x].piece = piece
-    board.board_array[yo][xo].piece = None
-    if not check_if_check(turn, board): movable = True
-    board.board_array[yo][xo].piece = piece
-    board.board_array[y][x].piece = old_piece
+    old_piece = move.captures
+    move.to_sq.piece = move.piece
+    move.from_sq.piece = None
+    if not check_if_check(move.piece.colour, board): movable = True
+    move.from_sq.piece = move.piece
+    move.to_sq.piece = old_piece
     return movable
 
 # if turn player has any legal moves
 def any_moves(turn, game_board):
-    for row in game_board.board_array:
-        for piece in (x.piece for x in row if x.piece is not None and x.piece.colour == turn):
-            for pseudomove in piece.legal_moves(piece.square, game_board):
-                if legal_and_ncheck(piece.square.coords(), pseudomove, piece, turn, game_board):
-                    return True
+    if actions(turn, game_board): return True
+    else: return False
+
 
 def main():
     gameExit = False
@@ -421,18 +447,16 @@ def main():
             if event.type == pyg.MOUSEBUTTONDOWN:
                 old_coord, old_square = get_mouse_square(game_board)
                 if old_square.piece is not None and old_square.piece.colour == turn:
-                    legal = old_square.piece.legal_moves(old_square, game_board)
+
+                    legal = old_square.piece.line_of_sight(old_square, game_board)
                     selected_piece = old_square.piece
                     xo, yo = old_coord
-                    tlegal = []
-                    for move in legal:
-                        if legal_and_ncheck(old_coord, move, selected_piece, turn, game_board):
-                            tlegal.append(move)
-                    legal = tlegal
+                    legal = legal_moves(selected_piece, game_board)
+
                     #castling
                     if isinstance(selected_piece, King) and not selected_piece.moved and not check_if_check(turn, game_board):
-                        if selected_piece.castle(game_board)[0]: legal.append((xo - 2, yo))
-                        if selected_piece.castle(game_board)[1]: legal.append((xo + 2, yo))
+                        if selected_piece.castle(game_board)[0]: legal.append(Move(old_square, game_board.board_array[yo][xo - 2]))
+                        if selected_piece.castle(game_board)[1]: legal.append(Move(old_square, game_board.board_array[yo][xo + 2]))
                         k_rook_sq = game_board.board_array[yo][xo + 3]
                         q_rook_sq = game_board.board_array[yo][xo - 4]
 
@@ -444,9 +468,9 @@ def main():
                             except IndexError: continue
                             if adjacent is not None and adjacent == en_pass_pawn:
                                 if turn == 'w':
-                                    legal.append((xo + i, yo + 1))
+                                    legal.append(Move(old_square, game_board.board_array[yo + 1][xo + i]))
                                 else:
-                                    legal.append((xo + i, yo - 1))
+                                    legal.append(Move(old_square, game_board.board_array[yo - 1][xo + i]))
                                 
                     down = True
                     old_square.piece = None
@@ -458,8 +482,10 @@ def main():
                 if old_square is not None:
                     new_coord, new_sq = get_mouse_square(game_board)
                     xn, yn = new_coord
+                    new_move = Move(old_square, new_sq, selected_piece)
+
                     # make move
-                    if selected_piece is not None and new_coord in legal:
+                    if selected_piece is not None and new_move in legal:
                         new_sq.piece = selected_piece
                         new_sq.piece.square = new_sq
                         if isinstance(selected_piece, Pawn) and en_pass_pawn is not None:
@@ -470,6 +496,7 @@ def main():
                         en_pass_pawn = None
                         if isinstance(selected_piece, (Pawn, King, Rook)):
                             selected_piece.moved = True
+
                         # castle rook    
                         if isinstance(selected_piece, King):
                             if xn == xo + 2:
@@ -478,7 +505,8 @@ def main():
                             if xn == xo - 2:
                                 game_board.board_array[yn][xo-1].piece = q_rook_sq.piece
                                 q_rook_sq.piece = None
-                        # if pawn's double stepped; en passant poss
+
+                        # if pawn's double stepped, en passant possible
                         if isinstance(selected_piece, Pawn) and abs(yn - yo) == 2:
                             selected_piece.en_passant = True
                             en_pass_pawn = selected_piece
@@ -492,6 +520,7 @@ def main():
                             turn = 'w' 
                     else:
                         old_square.piece = selected_piece
+
                     # Checkmate check
                     if check_if_check(turn, game_board):
                         mate = not any_moves(turn, game_board)
@@ -499,11 +528,13 @@ def main():
                     down = False
 
             game_board.draw()
-            # draws legal moves
+            
             if down == True and selected_piece is not None:
+                # draws legal moves
                 for i in legal:
-                    x = (i[0]*square_size) + int(square_size/2)
-                    y = ((7-i[1])*square_size) + int(square_size/2)
+                    x, y = i.to_sq.coords()
+                    x = (x*square_size) + int(square_size/2)
+                    y = ((7-y)*square_size) + int(square_size/2)
                     pyg.draw.circle(board_screen, (150, 0, 0), (x, y), square_size/10)
                 # blits piece under cursor when dragging
                 image = selected_piece.image()
@@ -513,7 +544,6 @@ def main():
 
             pyg.display.flip()
             clock.tick(30)
-
 
 if __name__ == "__main__":
     main()
