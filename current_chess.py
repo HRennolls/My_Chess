@@ -25,50 +25,38 @@ starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 test_fen = "3k4/2n2B2/1KP5/2B2p2/5b1p/7P/8/8 b - - 0 0"
 
 
-def on_board(los):
-    # Returns the sublist of the input that
-    # is actually on the board.
-    legal = [co for co in los if 
-            all(0 <= elem <= 7 for elem in co)]
-    return legal
-
 def diagonals(move_list, x, y, n, board, col):
-    vs = [
-        (1, 1),
-        (1, -1), 
-        (-1, 1), 
-        (-1, -1)
-    ]
+    vs = [(1, 1),
+          (1, -1), 
+          (-1, 1), 
+          (-1, -1)]
     for i in vs:
-        try:
-            obstruction_restriction(move_list, x, y, i[0], i[1], n, board, col)
+        try: obstruction_restriction(move_list, x, y, i[0], i[1], n, board, col)
         except IndexError: continue
-
 
 def rank_file(move_list, x, y, n, board, col):
-    vs = [
-        (1, 0), 
-        (0, 1), 
-        (-1, 0), 
-        (0, -1)
-    ]
+    vs =[(1, 0), 
+         (0, 1), 
+         (-1, 0), 
+         (0, -1)]
     for i in vs:
-        try:
-            obstruction_restriction(move_list, x, y, i[0], i[1], n, board, col)
+        try: obstruction_restriction(move_list, x, y, i[0], i[1], n, board, col)
         except IndexError: continue
         
-
 def obstruction_restriction(move_list, x, y, xp, yp, n, board, col):
     if isinstance(board, ChessBoard):
         for i in range(1, n):
-            if board.board_array[y + i*yp][x + i*xp].piece is None:
-                move_list.append((x + i*xp, y + i*yp))
-            elif board.board_array[y + i*yp][x + i*xp].piece.colour == col:
-                break
-            elif board.board_array[y + i*yp][x + i*xp].piece.colour != col:
+            targ = board.board_array[y + i*yp][x + i*xp]
+            if targ.piece is None: move_list.append((x + i*xp, y + i*yp))
+            elif targ.piece.colour == col: break
+            else:
                 move_list.append((x + i*xp, y + i*yp))
                 break
 
+def on_board(los):
+    # coords witihin board boundaries
+    return [co for co in los if 
+            all(0 <= elem <= 7 for elem in co)]
 
 class Piece(object):
     def __init__(self, name, square):
@@ -90,31 +78,22 @@ class Pawn(Piece):
     moved = False
     en_passant = False
 
-    def attacking_squares(self, square, board):
+    def attacking_squares(self, square):
         if self.colour == 'w': i = 1
         else: i = -1
-        x, y = square.coords()
-        a_squares = []
-        a_squares.append((x+1, y+i))
-        a_squares.append((x-1, y+i))   
-        return on_board(a_squares)
+        x, y = square.coords()  
+        return on_board([(x+1, y+i), (x-1, y+i)])
 
     def capturable_squares(self, square, board):
-        x, y = square.coords()
         c_squares = []
-        if self.colour == 'w': i = 1
-        else: i = -1
-        try:
-            if board.board_array[y + i][x + 1].piece.colour != self.colour:
-                c_squares.append((x+1, y+i))
-        except (AttributeError, IndexError) as e: pass
-        try:
-            if board.board_array[y + i][x - 1].piece.colour != self.colour:
-                c_squares.append((x-1, y+i))   
-        except (AttributeError, IndexError) as e: pass
-        return on_board(c_squares)
+        for x, y in self.attacking_squares(square):
+            try:
+                if board.board_array[y][x].piece.colour != self.colour:
+                    c_squares.append((x, y))
+            except (AttributeError): pass
+        return c_squares
             
-    def line_of_sight(self, square=None, board = None):
+    def line_of_sight(self, square=None, board=None):
         if square is None: square = self.square
         x, y = square.coords()
         los = []
@@ -136,26 +115,21 @@ class Knight(Piece):
     def line_of_sight(self, square = None, board = None):
         if square is None: square = self.square
         x,y = square.coords()
-        los = [
-            (x+2, y+1),
-            (x+2, y-1),
-            (x-2, y+1),
-            (x-2, y-1),
-            (x+1, y-2),
-            (x-1, y-2),
-            (x+1, y+2),
-            (x-1, y+2)
-        ]
+        los = [(x+2, y+1),
+               (x+2, y-1),
+               (x-2, y+1),
+               (x-2, y-1),
+               (x+1, y-2),
+               (x-1, y-2),
+               (x+1, y+2),
+               (x-1, y+2)]
         los = on_board(los)
         tlist = []
         for i in los:
             if board.board_array[i[1]][i[0]].piece is not None:
-                if board.board_array[i[1]][i[0]].piece.colour == self.colour:
-                    pass
-                else:
-                    tlist.append(i)
-            else:
-                tlist.append(i)
+                if board.board_array[i[1]][i[0]].piece.colour == self.colour: pass
+                else: tlist.append(i)
+            else: tlist.append(i)
         return tlist
 
 
@@ -187,27 +161,29 @@ class King(Piece):
         k_rook_sq = board.board_array[y][x + 3]
         q_rook_sq = board.board_array[y][x - 4]
 
+        # shortside
         if isinstance(k_rook_sq.piece, Rook) and not k_rook_sq.piece.moved:
             short_cas = True
-            #check way is clear
+            # check way is clear
             for i in board.board_array[y][ x+1: x+3]:
                 if i.piece is not None:
                     short_cas = False
                     break
-            for i in range(3):
-                if not legal_and_ncheck(Move(self.square, board.board_array[y][x+i]), board):
+            # relevant squares not in check
+            for i in board.board_array[y][ x: x+3]:
+                if not movable(Move(self.square, i), board):
                     short_cas = False
                     break
-
+        
+        # longside
         if isinstance(q_rook_sq.piece, Rook) and not q_rook_sq.piece.moved:
             long_cas = True
-            #check way is clear
             for i in board.board_array[y][ x-3: x]:
                 if i.piece is not None:
                     long_cas = False
                     break
-            for i in range(3):
-                if not legal_and_ncheck(Move(self.square, board.board_array[y][x-i]), board):
+            for i in board.board_array[y][ x-3: x+1]:
+                if not movable(Move(self.square, i), board):
                     long_cas = False
                     break
         return([long_cas, short_cas])
@@ -354,54 +330,21 @@ class Move():
         if not isinstance(__o, Move): return NotImplemented
         return self.from_sq == __o.from_sq and self.to_sq == __o.to_sq and self.piece == __o.piece
 
-def actions(turn, board):
-    moves = []
-    for row in board.board_array:
-        for piece in (x.piece for x in row if x.piece is not None and x.piece.colour == turn):
-            moves.extend(legal_moves(piece, board))
-    return moves
-
-def legal_moves(piece, board):
-    moves = [Move(piece.square, board.board_array[y][x]) for x, y in piece.line_of_sight(piece.square, board)]
-   
-    tlegal = []
-    for move in moves:
-        if legal_and_ncheck(move, board):
-            tlegal.append(move)
-   
-    return tlegal
-
-
-# loads images at init
-images = {} 
-def load_images():
-    pieces = ['wp', 'wr', 'wn', 'wb','wk', 'wq', 'bp', 'br', 'bn', 'bb', 'bk', 'bq']
-    for piece in pieces:
-        images[piece] = pyg.transform.scale(pyg.image.load("images/" + piece + ".png"), (square_size, square_size))
-
-def get_mouse_square(board = None):
-    mouse_pos = pyg.Vector2(pyg.mouse.get_pos())
-    x = int(mouse_pos[0] // square_size)
-    y = 7-int(mouse_pos[1] // square_size)
-    try: 
-        if x >= 0 and y >= 0:
-            if board is None: return (x, y)
-            else: return ((x, y), board.board_array[y][x])
-    except IndexError: pass
-    return None, None, None
 
 def all_opp_los(turn, board):
+    # determine all squares in opponent's line of sight
     coords = set()
     for row in board.board_array:
         for i in row:
             if i.piece is not None:
                 if i.piece.colour != turn and isinstance(i.piece, Pawn):
-                    coords.update(i.piece.attacking_squares(i.piece.square, board))
+                    coords.update(i.piece.attacking_squares(i.piece.square))
                 elif i.piece.colour != turn:
                     coords.update(i.piece.line_of_sight(i.piece.square, board))
     return list(coords)
 
-def check_if_check(turn, board):
+def check_if_check(turn, board) -> bool:
+    # if self king in opp los, turn player in check
     coords = all_opp_los(turn, board)
     for m in coords:
         x, y = m
@@ -410,8 +353,9 @@ def check_if_check(turn, board):
         else: pass
     return False
 
-# if a move results in check on turn king
-def legal_and_ncheck(move, board):
+
+def movable(move, board) -> bool:
+    # if a move results in check on self king (illegal)
     movable = False
     old_piece = move.captures
     move.to_sq.piece = move.piece
@@ -421,10 +365,46 @@ def legal_and_ncheck(move, board):
     move.to_sq.piece = old_piece
     return movable
 
-# if turn player has any legal moves
+def legal_moves(piece, board):
+    # all pseudolegals that don't result in check (legal)
+    moves = [Move(piece.square, board.board_array[y][x]) for x, y in piece.line_of_sight(piece.square, board)]
+    tlegal = []
+    for move in moves:
+        if movable(move, board):
+            tlegal.append(move)
+    return tlegal
+
+def actions(turn, board):
+    # all legal moves available for turn player
+    moves = []
+    for row in board.board_array:
+        for piece in (x.piece for x in row if x.piece is not None and x.piece.colour == turn):
+            moves.extend(legal_moves(piece, board))
+    return moves
+
 def any_moves(turn, game_board):
     if actions(turn, game_board): return True
     else: return False
+
+
+images = {} 
+def load_images():
+    # helps efficiency
+    pieces = ['wp', 'wr', 'wn', 'wb','wk', 'wq', 'bp', 'br', 'bn', 'bb', 'bk', 'bq']
+    for piece in pieces:
+        images[piece] = pyg.transform.scale(pyg.image.load("images/" + piece + ".png"), (square_size, square_size))
+
+def get_mouse_square(board = None):
+    # returns square cursor hovers over
+    mouse_pos = pyg.Vector2(pyg.mouse.get_pos())
+    x = int(mouse_pos[0] // square_size)
+    y = 7-int(mouse_pos[1] // square_size)
+    try: 
+        if x >= 0 and y >= 0:
+            if board is None: return (x, y)
+            else: return ((x, y), board.board_array[y][x])
+    except IndexError: pass
+    return None, None, None
 
 
 def main():
@@ -447,7 +427,6 @@ def main():
             if event.type == pyg.MOUSEBUTTONDOWN:
                 old_coord, old_square = get_mouse_square(game_board)
                 if old_square.piece is not None and old_square.piece.colour == turn:
-
                     legal = old_square.piece.line_of_sight(old_square, game_board)
                     selected_piece = old_square.piece
                     xo, yo = old_coord
@@ -471,7 +450,6 @@ def main():
                                     legal.append(Move(old_square, game_board.board_array[yo + 1][xo + i]))
                                 else:
                                     legal.append(Move(old_square, game_board.board_array[yo - 1][xo + i]))
-                                
                     down = True
                     old_square.piece = None
                 else:
@@ -514,12 +492,13 @@ def main():
                         # promotion: always Queen
                         if isinstance(selected_piece, Pawn) and selected_piece.promotion():
                             new_sq.piece = Queen('{}q'.format(turn), new_sq)
-                        if turn == 'w':
-                            turn = 'b'
-                        else:
-                            turn = 'w' 
-                    else:
-                        old_square.piece = selected_piece
+                        
+                        # change turns
+                        if turn == 'w': turn = 'b'
+                        else: turn = 'w' 
+                    
+                    # no legal square was selected
+                    else: old_square.piece = selected_piece
 
                     # Checkmate check
                     if check_if_check(turn, game_board):
