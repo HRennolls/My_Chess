@@ -55,9 +55,9 @@ def obstruction_restriction(move_list, x, y, xp, yp, n, board, col):
                 break
 
 def on_board(los):
-    # coords witihin board boundaries
     return [co for co in los if 
             all(0 <= elem <= 7 for elem in co)]
+
 
 class Piece(object):
     def __init__(self, name, square):
@@ -108,7 +108,7 @@ class Pawn(Piece):
         return on_board(los)
 
     def promotion(self):
-        x, y = self.square.coords()
+        _, y = self.square.coords()
         if y == 0 or y == 7: return True
     
 
@@ -161,10 +161,10 @@ class King(Piece):
         x, y = self.square.coords()
         k_rook_sq = board.board_array[y][x + 3]
         q_rook_sq = board.board_array[y][x - 4]
-
-        # shortside
+        short_cas = True
+        long_cas = True
+        # shortside possible -> bool
         if isinstance(k_rook_sq.piece, Rook) and not k_rook_sq.piece.moved:
-            short_cas = True
             # check way is clear
             for i in board.board_array[y][ x+1: x+3]:
                 if i.piece is not None:
@@ -175,18 +175,19 @@ class King(Piece):
                 if not movable(Move(self.square, i), board):
                     short_cas = False
                     break
-        
-        # longside
+        else: short_cas = False
+        # longside -> bool
         if isinstance(q_rook_sq.piece, Rook) and not q_rook_sq.piece.moved:
-            long_cas = True
             for i in board.board_array[y][ x-3: x]:
                 if i.piece is not None:
                     long_cas = False
                     break
             for i in board.board_array[y][ x-2: x+1]:
                 if not movable(Move(self.square, i), board):
+                    
                     long_cas = False
                     break
+        else: long_cas = False
         return([long_cas, short_cas])
 
     def line_of_sight(self, square=None, board = None):
@@ -342,8 +343,6 @@ class Move():
         return self.from_sq == __o.from_sq and self.to_sq == __o.to_sq and self.piece == __o.piece
 
 
-
-
 def all_opp_los(board):
     # determine all squares in opponent's line of sight
     coords = set()
@@ -366,7 +365,6 @@ def check_if_check(board) -> bool:
         else: pass
     return False
 
-
 def movable(move, board) -> bool:
     # if a move results in check on self king (illegal)
     movable = False
@@ -379,13 +377,37 @@ def movable(move, board) -> bool:
     return movable
 
 def legal_moves(piece, board):
-    # all pseudolegals that don't result in check (legal)
     moves = [Move(piece.square, board.board_array[y][x]) for x, y in piece.line_of_sight(piece.square, board)]
-    tlegal = []
-    for move in moves:
+    legal = [move for move in moves if movable(move, board)]
+    """for move in moves:
         if movable(move, board):
-            tlegal.append(move)
-    return tlegal
+            tlegal.append(move)"""
+
+    if isinstance(piece, King) and not piece.moved and not check_if_check(board):
+        x, y = piece.square.coords()
+        if piece.castle(board)[0]:
+            long_castle = Move(piece.square, board.board_array[y][x - 2])
+            long_castle.castle = True
+            legal.append(long_castle)
+        if piece.castle(board)[1]: 
+            short_castle = Move(piece.square, board.board_array[y][x + 2])
+            short_castle.castle = True
+            legal.append(short_castle)
+
+    elif isinstance(piece, Pawn):
+        for i in [-1, 1]:
+            x, y = piece.square.coords()
+            try:
+                adjacent = board.board_array[y][x + i].piece
+            except IndexError: continue
+            if isinstance(adjacent, Pawn) and adjacent.en_passant:
+                if board.turn == 'w': j = 1
+                else: j = -1
+                capture = Move(piece.square, board.board_array[y + j][x + i])
+                capture.en_passant = True
+                legal.append(capture)
+    
+    return legal
 
 def actions(board):
     # all legal moves available for turn player
@@ -399,6 +421,78 @@ def any_moves(game_board):
     if actions(game_board): return True
     else: return False
 
+def make_move(move, board):
+    xo, yo = move.from_sq.coords()
+    x, y = move.to_sq.coords()
+    if move.castle: 
+        if x - xo > 0:
+            board.board_array[y][xo+1].piece = board.board_array[y][xo+3].piece
+            board.board_array[y][xo+1].piece.square = board.board_array[y][xo+1]
+            board.board_array[y][xo+3].piece = None
+        else:
+            board.board_array[y][xo-1].piece = board.board_array[y][xo-4].piece
+            board.board_array[y][xo-1].piece.square = board.board_array[y][xo-1]
+            board.board_array[y][xo-4].piece = None
+
+    if move.en_passant:
+        if board.turn == 'w': i = -1
+        else: i = 1
+        board.board_array[y+i][x].piece = None
+
+    # remove en passant possibility from all pawns
+    for row in board.board_array:
+        for i in row:
+            if isinstance(i, Pawn): i.en_passant = False  
+
+    if isinstance(move.piece, Pawn) and abs(y-yo) == 2:
+        move.piece.en_passant = True
+        
+    move.to_sq.piece = move.piece
+    move.to_sq.piece.square = move.to_sq
+    move.from_sq.piece = None
+    
+    if isinstance(move.piece, (Pawn, King, Rook)):
+        move.piece.moved = True
+
+    if move.promotion:
+        move.piece = Queen('{}q'.format(board.turn), move.to_sq)
+
+    if board.turn == 'w': board.turn = 'b'
+    else: board.turn = 'w'
+
+def unmake_move(move, board):
+    xo, yo = move.from_sq.coords()
+    x, y = move.to_sq.coords()
+    board.board_array[yo][xo].piece = move.piece
+    board.board_array[yo][xo].piece.square = board.board_array[yo][xo]
+    board.board_array[y][x].piece = move.captures
+    if board.board_array[y][x].piece is not None:
+        board.board_array[y][x].piece.square = board.board_array[y][x]
+    #castling
+    if move.castle:
+        if x - xo > 0:
+            board.board_array[y][xo+3].piece = board.board_array[y][xo+1].piece 
+            board.board_array[y][xo+3].piece.square = board.board_array[y][xo+3]
+            board.board_array[y][xo+1].piece = None
+        else:
+            board.board_array[y][xo-4].piece = board.board_array[y][xo-1].piece
+            board.board_array[y][xo-4].piece.square = board.board_array[y][xo-4]
+            board.board_array[y][xo-1].piece = None
+    #en passant
+    if move.en_passant:
+        if board.turn == 'w': i, j = -1, 'b'
+        else: i, j = 1, 'w'
+        board.board_array[y+i][x].piece = Pawn('{}p'.format(j), board.board_array[y+i][x])
+
+    if isinstance(move.piece, Pawn) and abs(y-yo) == 2:
+        move.piece.en_passant = False
+
+    if isinstance(move.piece, (Pawn, King, Rook)):
+        move.piece.moved = False
+    # currently does not reengage opponent en passant possibilities
+    if board.turn == 'w': board.turn = 'b'
+    else: board.turn = 'w'
+    
 
 images = {} 
 def load_images():
@@ -419,43 +513,6 @@ def get_mouse_square(board = None):
     except IndexError: pass
     return None, None, None
 
-def make_move(move, board):
-    xo, yo = move.from_sq.coords()
-    x, y = move.to_sq.coords()
-    
-    if move.castle: 
-        if x - xo > 0:
-            board.board_array[y][xo+1].piece = board.board_array[y][xo+3].piece
-            board.board_array[y][xo+3].piece = None
-        else:
-            board.board_array[y][xo-1].piece = board.board_array[y][xo-4].piece
-            board.board_array[y][xo-4].piece = None
-
-    if move.en_passant:
-        if board.turn == 'w': i = -1
-        else: i = 1
-        board.board_array[y+i][x].piece = None
-
-    # remove en passant possibility from all pawns
-    for row in board.board_array:
-        for i in row:
-            if isinstance(i, Pawn): i.en_passant = False  
-
-    if isinstance(move.piece, Pawn) and abs(y-yo) == 2:
-        move.piece.en_passant = True
-        
-    move.to_sq.piece = move.piece
-    move.to_sq.piece.square = move.to_sq
-    
-
-    if isinstance(move.piece, (Pawn, King, Rook)):
-        move.piece.moved = True
-
-    if move.promotion:
-        move.piece = Queen('{}q'.format(board.turn), move.to_sq)
-    
-    
-    
 def main():
     gameExit = False
     load_images()
@@ -464,92 +521,57 @@ def main():
     game_board.fen_to_board(starting_fen) #choose starting position
     selected_piece = None
     down = False #click-drag
-    en_pass_pawn = None
 
     while not gameExit:
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
                 gameExit = True
-                mate = False
+                #mate = False
 
-            if event.type == pyg.MOUSEBUTTONDOWN:
-                old_coord, old_square = get_mouse_square(game_board)
-                if old_square.piece is not None and old_square.piece.colour == game_board.turn:
-                    legal = old_square.piece.line_of_sight(old_square, game_board)
-                    selected_piece = old_square.piece
-                    xo, yo = old_coord
-                    legal = legal_moves(selected_piece, game_board)
+            if game_board.turn == 'w':
+                if event.type == pyg.MOUSEBUTTONDOWN:
+                    _, old_square = get_mouse_square(game_board)
+                    if old_square.piece is not None and old_square.piece.colour == game_board.turn:
+                        selected_piece = old_square.piece
+                        legal = legal_moves(selected_piece, game_board)       
+                        down = True
+                        old_square.piece = None
+                    else:
+                        old_square = None
+                if event.type == pyg.MOUSEBUTTONUP:
+                    if old_square is not None:
+                        _, new_sq = get_mouse_square(game_board)
+                        match = [x for x in legal if x.to_sq == new_sq and selected_piece == x.piece]
+                        if match: new_move = match[0]
+                        else: new_move = None
+                        if selected_piece is not None and new_move is not None:
+                            # make move
+                            make_move(new_move, game_board)
+                        # no legal square was selected
+                        else: old_square.piece = selected_piece
+                        down = False
 
-                    #castling
-                    if isinstance(selected_piece, King) and not selected_piece.moved and not check_if_check(game_board):
-                        if selected_piece.castle(game_board)[0]:
-                            short_castle = Move(old_square, game_board.board_array[yo][xo - 2])
-                            short_castle.castle = True
-                            legal.append(short_castle)
-                        if selected_piece.castle(game_board)[1]: 
-                            long_castle = Move(old_square, game_board.board_array[yo][xo + 2])
-                            long_castle.castle = True
-                            legal.append(long_castle)
-    
-                    # en passant
-                    if isinstance(selected_piece, Pawn):
-                        for i in [-1, 1]:
-                            try:
-                                adjacent = game_board.board_array[yo][xo + i].piece
-                            except IndexError: continue
-                            if isinstance(adjacent, Pawn) and adjacent.en_passant:
-                                if game_board.turn == 'w': j = 1
-                                else: j = -1
-                                capture = Move(old_square, game_board.board_array[yo + j][xo + i])
-                                capture.en_passant = True
-                                legal.append(capture)
-                                
-                    down = True
-                    old_square.piece = None
-                else:
-                    old_coord = None
-                    old_square = None
+                game_board.draw()
 
-            if event.type == pyg.MOUSEBUTTONUP:
-                if old_square is not None:
-                    _, new_sq = get_mouse_square(game_board)
-                    match = [x for x in legal if x.to_sq == new_sq and selected_piece == x.piece]
-                    if match: new_move = match[0]
-                    else: new_move = None
-                    if selected_piece is not None and new_move is not None:
-                        # make move
-                        make_move(new_move, game_board)
-                        print(engine.naive_eval(game_board))
+                if down == True and selected_piece is not None:
+                    # draws legal moves
+                    for i in legal:
+                        x, y = i.to_sq.coords()
+                        x = (x*square_size) + int(square_size/2)
+                        y = ((7-y)*square_size) + int(square_size/2)
+                        pyg.draw.circle(board_screen, (150, 0, 0), (x, y), square_size/10)
 
-                        
+                    # blits piece under cursor when dragging
+                    image = selected_piece.image()
+                    image_rect = image.get_rect()
+                    image_rect.center = pyg.Vector2(pyg.mouse.get_pos())
+                    board_screen.blit(image,image_rect)
+            else:
+                move, _ = engine.negamaxroot(game_board)
+                make_move(move, game_board)
+                game_board.draw()
 
-                        # change turns
-                        if game_board.turn == 'w': game_board.turn = 'b'
-                        else: game_board.turn = 'w' 
-                    
-                    # no legal square was selected
-                    else: old_square.piece = selected_piece
-
-                    # Checkmate check
-                    if check_if_check(game_board):
-                        mate = not any_moves(game_board)
-                        if mate: gameExit = True 
-                    down = False
-            game_board.draw()
-
-            if down == True and selected_piece is not None:
-                # draws legal moves
-                for i in legal:
-                    x, y = i.to_sq.coords()
-                    x = (x*square_size) + int(square_size/2)
-                    y = ((7-y)*square_size) + int(square_size/2)
-                    pyg.draw.circle(board_screen, (150, 0, 0), (x, y), square_size/10)
-                # blits piece under cursor when dragging
-                image = selected_piece.image()
-                image_rect = image.get_rect()
-                image_rect.center = pyg.Vector2(pyg.mouse.get_pos())
-                board_screen.blit(image,image_rect)
-
+            
             pyg.display.flip()
             clock.tick(30)
 
