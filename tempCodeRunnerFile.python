@@ -1,7 +1,0 @@
-from re import X
-
-
-x = 5
-y = x 
-x += 2
-print(y, x)
